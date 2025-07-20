@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Quản trị Cửa hàng</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="icon" href="images/icon.ico" type="image/x-icon" />
+</head>
+<body class="bg-gray-50 font-sans">
+<div id="root"></div>
+
+<script type="text/babel">
+
+function Sidebar({ currentPage, setCurrentPage }) {
+  const menu = [
+    { name: "Tổng quan", icon: "📊" },
+    { name: "Sản phẩm", icon: "🛒" },
+    { name: "Đơn hàng", icon: "📦" },
+    { name: "Khách hàng", icon: "👥" }
+  ];
+  return (
+    <nav className="w-64 min-h-screen bg-gradient-to-b from-pink-500 to-orange-400 text-white flex flex-col shadow-2xl rounded-r-2xl">
+      <div className="p-6 text-3xl font-extrabold border-b border-pink-300 flex items-center gap-2">
+        <span>🌸</span> <span>Cửa Hàng</span>
+      </div>
+      <ul className="flex-1">
+        {menu.map(item => (
+          <li key={item.name}>
+            <button 
+              className={`w-full text-left px-6 py-4 hover:bg-pink-400 flex items-center gap-3 ${currentPage === item.name ? "bg-pink-600" : ""}`}
+              onClick={() => setCurrentPage(item.name)}
+            >
+              <span>{item.icon}</span> <span>{item.name}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+function Dashboard() {
+  const [summary, setSummary] = React.useState(null);
+  const [dailyData, setDailyData] = React.useState([]);
+  const barRef = React.useRef(null);
+  const lineRef = React.useRef(null);
+  const barChart = React.useRef(null);
+  const lineChart = React.useRef(null);
+
+  React.useEffect(() => {
+    fetch("/api/orders/summary/all")
+      .then(res => res.json())
+      .then(setSummary)
+      .catch(() => alert("Không lấy được dữ liệu tổng quan"));
+
+    fetch("/api/orders/summary/daily")
+      .then(res => res.json())
+      .then(data => setDailyData(data))
+      .catch(() => alert("Không lấy được dữ liệu biểu đồ"));
+  }, []);
+
+  React.useEffect(() => {
+    if (!dailyData.length) return;
+
+    if (barChart.current) barChart.current.destroy();
+    if (lineChart.current) lineChart.current.destroy();
+
+    const labels = dailyData.map(d => d.date);
+    const dataValues = dailyData.map(d => parseFloat(d.total));
+
+    if (barRef.current) {
+      barChart.current = new Chart(barRef.current, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Doanh thu",
+            data: dataValues,
+            backgroundColor: "rgba(236, 72, 153, 0.6)"
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: value => value.toLocaleString() + " ₫" }
+            }
+          }
+        }
+      });
+    }
+
+    if (lineRef.current) {
+      lineChart.current = new Chart(lineRef.current, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Doanh thu theo ngày",
+            data: dataValues,
+            borderColor: "rgba(249, 115, 22, 0.9)",
+            backgroundColor: "rgba(249, 115, 22, 0.2)",
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: value => value.toLocaleString() + " ₫" }
+            }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (barChart.current) barChart.current.destroy();
+      if (lineChart.current) lineChart.current.destroy();
+    };
+  }, [dailyData]);
+
+  return (
+    <div className="p-8">
+      <h2 className="text-3xl font-bold mb-6 text-pink-600">Tổng quan</h2>
+      {summary && (
+        <div className="mb-8 grid grid-cols-2 gap-6">
+          <div className="p-6 bg-white rounded-2xl shadow-xl text-center">
+            <div className="text-2xl font-bold text-pink-600">{summary.totalOrders}</div>
+            <div className="text-gray-500">Tổng đơn hàng</div>
+          </div>
+          <div className="p-6 bg-white rounded-2xl shadow-xl text-center">
+            <div className="text-2xl font-bold text-orange-500">
+              {Number(summary.totalRevenue).toLocaleString()} ₫
+            </div>
+            <div className="text-gray-500">Tổng doanh thu</div>
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white p-6 rounded-2xl shadow-xl">
+          <canvas ref={barRef}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-xl">
+          <canvas ref={lineRef}></canvas>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Products() {
+  const [products, setProducts] = React.useState([]);
+  const [selectedProduct, setSelectedProduct] = React.useState(null);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+
+  const [newProduct, setNewProduct] = React.useState({
+    name: '',
+    description: '',
+    price: '',
+    stock: '',
+    image: ''
+  });
+
+  const [editProduct, setEditProduct] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch("/api/products")
+      .then(res => res.json())
+      .then(setProducts)
+      .catch(() => alert("Không lấy được sản phẩm"));
+  }, []);
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    if (!newProduct.name || !newProduct.price) {
+      alert("Vui lòng nhập tên và giá sản phẩm");
+      return;
+    }
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newProduct,
+          price: parseFloat(newProduct.price),
+          stock: parseInt(newProduct.stock) || 0
+        })
+      });
+      if (!res.ok) throw new Error("Lỗi khi thêm sản phẩm");
+      const data = await res.json();
+      const added = data.product;
+      setProducts([...products, added]);
+      setShowAddForm(false);
+      setNewProduct({ name: '', description: '', price: '', stock: '', image: '' });
+      Swal.fire("Thành công!", "Đã thêm sản phẩm.", "success");
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const openEdit = () => {
+    setIsEditing(true);
+    setEditProduct(selectedProduct);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditProduct(null);
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditProduct(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editProduct.name || !editProduct.price) {
+      alert("Vui lòng nhập tên và giá sản phẩm");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/products/${editProduct._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...editProduct,
+          price: parseFloat(editProduct.price),
+          stock: parseInt(editProduct.stock) || 0
+        })
+      });
+      if (!res.ok) throw new Error("Lỗi khi cập nhật sản phẩm");
+      const updatedData = await res.json();
+      setProducts(products.map(p => (p._id === updatedData.product._id ? updatedData.product : p)));
+      setSelectedProduct(updatedData.product);
+      setIsEditing(false);
+      setEditProduct(null);
+      Swal.fire("Thành công!", "Đã cập nhật sản phẩm.", "success");
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+const handleDelete = async () => {
+  Swal.fire({
+    title: `Bạn có chắc muốn xóa "${selectedProduct.name}"?`,
+    text: "Hành động này không thể hoàn tác.",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Xóa",
+    cancelButtonText: "Hủy"
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`/api/products/${selectedProduct._id}`, {
+          method: "DELETE"
+        });
+        if (!res.ok) throw new Error("Lỗi khi xóa sản phẩm");
+        setProducts(products.filter(p => p._id !== selectedProduct._id));
+        setSelectedProduct(null);
+        setIsEditing(false);
+        setEditProduct(null);
+        Swal.fire("Đã xóa!", "Sản phẩm đã bị xóa.", "success");
+      } catch (err) {
+        Swal.fire("Lỗi", err.message, "error");
+      }
+    }
+  });
+};
+
+  return (
+    <div className="p-8">
+      <h2 className="text-3xl font-bold mb-6 text-pink-600 flex justify-between items-center">
+        Sản phẩm
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+        >
+          + Thêm sản phẩm
+        </button>
+      </h2>
+
+      {showAddForm && (
+        <div className="mb-8 bg-white p-6 rounded-2xl shadow-xl max-w-xl">
+          <form onSubmit={handleAddProduct} className="space-y-4">
+            <div>
+              <label className="block font-semibold mb-1">Tên sản phẩm *</label>
+              <input
+                type="text"
+                value={newProduct.name}
+                onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Mô tả</label>
+              <textarea
+                value={newProduct.description}
+                onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                rows={3}
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Giá (₫) *</label>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                value={newProduct.price}
+                onChange={e => setNewProduct({ ...newProduct, price: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Số lượng tồn kho</label>
+              <input
+                type="number"
+                min="0"
+                value={newProduct.stock}
+                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">URL ảnh</label>
+              <input
+                type="text"
+                value={newProduct.image}
+                onChange={e => setNewProduct({ ...newProduct, image: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+            <div className="flex gap-4">
+              <button type="submit" className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700">
+                Thêm
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="px-4 py-2 border rounded border-gray-300 hover:bg-gray-100"
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <table className="min-w-full bg-white rounded-2xl shadow-xl">
+        <thead>
+          <tr className="bg-pink-100 text-pink-700">
+            <th className="py-4 px-6 text-left">Ảnh</th>
+            <th className="py-4 px-6 text-left">Tên</th>
+            <th className="py-4 px-6 text-left">Giá</th>
+            <th className="py-4 px-6 text-left">Kho</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map(p => (
+            <tr
+              key={p._id}
+              className="hover:bg-pink-50 cursor-pointer"
+              onClick={() => {
+                setSelectedProduct(p);
+                setIsEditing(false);
+                setEditProduct(null);
+              }}
+            >
+              <td className="py-4 px-6">
+                <img src={p.image} alt={p.name} className="w-12 h-12 object-cover rounded" />
+              </td>
+              <td className="py-4 px-6">{p.name}</td>
+              <td className="py-4 px-6">{p.price.toLocaleString()} ₫</td>
+              <td className="py-4 px-6">{p.stock}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl max-w-lg w-full relative max-h-[90vh] overflow-auto">
+            <button
+              onClick={() => {
+                setSelectedProduct(null);
+                setIsEditing(false);
+                setEditProduct(null);
+              }}
+              className="absolute top-2 right-4 text-2xl text-gray-400 hover:text-gray-600"
+            >
+              &times;
+            </button>
+
+            {!isEditing ? (
+              <>
+                <img
+                  src={selectedProduct.image}
+                  alt={selectedProduct.name}
+                  className="w-full h-64 object-cover rounded mb-4"
+                />
+                <h3 className="text-2xl font-bold mb-2 text-pink-600">{selectedProduct.name}</h3>
+                <p className="text-gray-700 mb-2">{selectedProduct.description}</p>
+                <div className="text-xl font-bold text-orange-500 mb-1">
+                  {selectedProduct.price.toLocaleString()} ₫
+                </div>
+                <div className="text-gray-500 mb-4">Kho còn: {selectedProduct.stock}</div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={openEdit}
+                    className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div>
+                  <label className="block font-semibold mb-1">Tên sản phẩm *</label>
+                  <input
+                    type="text"
+                    value={editProduct.name}
+                    onChange={e => handleEditChange("name", e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Mô tả</label>
+                  <textarea
+                    value={editProduct.description}
+                    onChange={e => handleEditChange("description", e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Giá (₫) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={editProduct.price}
+                    onChange={e => handleEditChange("price", e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Số lượng tồn kho</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editProduct.stock}
+                    onChange={e => handleEditChange("stock", e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">URL ảnh</label>
+                  <input
+                    type="text"
+                    value={editProduct.image}
+                    onChange={e => handleEditChange("image", e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    placeholder="https://0.soompi.io/wp-content/uploads/2024/02/21042615/Jisoo.jpg"
+                  />
+                </div>
+                <div className="flex gap-4">
+                  <button type="submit" className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700">
+                    Lưu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="px-4 py-2 border rounded border-gray-300 hover:bg-gray-100"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Orders() {
+  const [orders, setOrders] = React.useState([]);
+  const [selectedOrder, setSelectedOrder] = React.useState(null);
+  const [orderDetail, setOrderDetail] = React.useState(null);
+  const [filterStatus, setFilterStatus] = React.useState("all");
+  const translateStatus = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'Chờ xử lý';
+      case 'paid':
+        return 'Đã thanh toán';
+      case 'shipped':
+        return 'Đã gửi';
+      case 'delivered':
+        return 'Đã giao';
+      case 'canceled':
+        return 'Đã hủy';
+      default:
+        return 'Không xác định';
+    }
+  };
+
+  const [showAddModal, setShowAddModal] = React.useState(false);
+  const [newOrder, setNewOrder] = React.useState({
+    customer_id: "",
+    shipping_address: "",
+    payment_method: "cod",
+    items: [{ name: "", price: 0, quantity: 1, product_id: "" }]
+  });
+
+  const [customers, setCustomers] = React.useState([]);
+  const [products, setProducts] = React.useState([]);
+
+  React.useEffect(() => {
+    fetchOrders();
+    fetch("/api/customers")
+      .then(res => res.json())
+      .then(setCustomers);
+    fetch("/api/products")
+      .then(res => res.json())
+      .then(setProducts);
+  }, []);
+
+  const fetchOrders = () => {
+    fetch("/api/orders")
+      .then(res => res.json())
+      .then(setOrders)
+      .catch(() => Swal.fire("Lỗi", "Không lấy được đơn hàng", "error"));
+  };
+
+  const viewOrderDetail = (order) => {
+    setSelectedOrder(order);
+    fetch(`/api/orders/${order.id}`)
+      .then(res => res.json())
+      .then(setOrderDetail)
+      .catch(() => Swal.fire("Lỗi", "Không lấy được chi tiết đơn", "error"));
+  };
+
+  const updateStatus = async (status) => {
+    try {
+      const res = await fetch(`/api/orders/${selectedOrder.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error("Lỗi cập nhật trạng thái");
+      Swal.fire("Thành công", "Đã cập nhật trạng thái", "success");
+      fetchOrders();
+      setSelectedOrder(null);
+      setOrderDetail(null);
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const deleteOrder = async () => {
+    if (!await Swal.fire({
+      title: `Xóa đơn #${selectedOrder.id}?`,
+      text: "Thao tác này không thể hoàn tác!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Xóa",
+      cancelButtonText: "Hủy"
+    }).then(r => r.isConfirmed)) return;
+
+    try {
+      const res = await fetch(`/api/orders/${selectedOrder.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Lỗi khi xóa đơn hàng");
+      Swal.fire("Đã xóa", "Đơn hàng đã được xóa", "success");
+      fetchOrders();
+      setSelectedOrder(null);
+      setOrderDetail(null);
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const addItemRow = () => {
+    setNewOrder({
+      ...newOrder,
+      items: [...newOrder.items, { name: "", price: 0, quantity: 1, product_id: "" }]
+    });
+  };
+
+  const createOrder = async () => {
+    try {
+      const payload = { ...newOrder };
+      console.log("Gửi payload tạo đơn:", payload);
+
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Lỗi tạo đơn hàng: ${errText}`);
+      }
+
+      Swal.fire("Thành công", "Đã tạo đơn hàng", "success");
+      setShowAddModal(false);
+      fetchOrders();
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const calculateOrderTotal = () => {
+    return newOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  return (
+    <div className="p-8">
+      <h2 className="text-3xl font-bold mb-6 text-pink-600">Đơn hàng</h2>
+
+      <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+        >
+          + Thêm đơn hàng
+        </button>
+
+        <select
+          className="border px-4 py-2 rounded"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value="all">Tất cả trạng thái</option>
+          <option value="pending">Chờ xử lý</option>
+          <option value="paid">Đã thanh toán</option>
+          <option value="shipped">Đã gửi</option>
+          <option value="delivered">Đã giao</option>
+          <option value="canceled">Đã hủy</option>
+        </select>
+      </div>
+
+      <table className="min-w-full bg-white rounded-2xl shadow-xl">
+        <thead>
+          <tr className="bg-pink-100 text-pink-700">
+            <th className="py-4 px-6 text-left">Mã đơn</th>
+            <th className="py-4 px-6 text-left">Trạng thái</th>
+            <th className="py-4 px-6 text-left">Tổng</th>
+            <th className="py-4 px-6 text-left">Ngày tạo</th>
+            <th className="py-4 px-6 text-left">Cập nhật</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders
+            .filter(o =>
+              filterStatus === "all" || o.status === filterStatus
+            )
+            .map(o => (
+              <tr
+                key={o.id}
+                className="hover:bg-pink-50 cursor-pointer"
+                onClick={() => viewOrderDetail(o)}
+              >
+                <td className="py-4 px-6 font-semibold text-pink-600">#{o.id}</td>
+                <td className="py-4 px-6 capitalize">{translateStatus(o.status)}</td>
+                
+                <td className="py-4 px-6">{Number(o.total).toLocaleString()} ₫</td>
+                <td className="py-4 px-6 text-gray-500">{new Date(o.created_at).toLocaleDateString("vi-VN")}</td>
+                <td className="py-4 px-6 text-gray-500">{new Date(o.updated_at).toLocaleDateString("vi-VN")}</td>
+              </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl max-w-xl w-full relative max-h-[90vh] overflow-auto">
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="absolute top-2 right-4 text-2xl text-gray-400 hover:text-gray-600"
+            >
+              &times;
+            </button>
+            <h3 className="text-2xl font-bold mb-4 text-pink-600">
+              Thêm đơn hàng mới
+            </h3>
+
+            <div className="mb-3">
+              <label className="block text-sm mb-1">Khách hàng</label>
+              <select
+                className="w-full border px-3 py-2 rounded"
+                onChange={e => setNewOrder({ ...newOrder, customer_id: e.target.value })}
+                value={newOrder.customer_id}
+              >
+                <option value="">-- Chọn khách hàng --</option>
+                {customers.map(c => (
+                  <option key={c._id} value={c._id}>
+                    {c.name} (ID: {c._id})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-sm mb-1">Địa chỉ giao</label>
+              <input
+                type="text"
+                className="w-full border px-3 py-2 rounded"
+                value={newOrder.shipping_address}
+                onChange={e => setNewOrder({ ...newOrder, shipping_address: e.target.value })}
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="block text-sm mb-1">Phương thức thanh toán</label>
+              <select
+                className="w-full border px-3 py-2 rounded"
+                value={newOrder.payment_method}
+                onChange={e => setNewOrder({ ...newOrder, payment_method: e.target.value })}
+              >
+                <option value="cod">COD</option>
+                <option value="stripe">STRIPE</option>
+              </select>
+            </div>
+
+            <h4 className="font-bold text-lg mb-2 text-orange-500">Sản phẩm</h4>
+            {newOrder.items.map((item, idx) => (
+              <div key={idx} className="mb-4 grid grid-cols-5 gap-2 items-center">
+                <select
+                  className="border px-2 py-1 rounded col-span-2"
+                  value={item.product_id}
+                  onChange={e => {
+                    const items = [...newOrder.items];
+                    const selectedProduct = products.find(p => p._id === e.target.value);
+                    if (selectedProduct) {
+                      items[idx].product_id = selectedProduct._id;
+                      items[idx].name = selectedProduct.name;
+                      items[idx].price = selectedProduct.price;
+                    } else {
+                      items[idx] = { name: "", price: 0, quantity: 1, product_id: "" };
+                    }
+                    setNewOrder({ ...newOrder, items });
+                  }}
+                >
+                  <option value="">-- Chọn sản phẩm --</option>
+                  {products.map(p => (
+                    <option key={p._id} value={p._id}>
+                      {p.name} (Tồn: {p.stock}) - (ID: {p._id})
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="number"
+                  className="border px-2 py-1 rounded"
+                  placeholder="SL"
+                  min={1}
+                  max={(() => {
+                    const p = products.find(prod => prod._id === item.product_id);
+                    return p ? p.stock : 1;
+                  })()}
+                  value={item.quantity}
+                  onChange={e => {
+                    const items = [...newOrder.items];
+                    let qty = parseInt(e.target.value) || 1;
+                    const product = products.find(p => p._id === item.product_id);
+                    if (product && qty > product.stock) qty = product.stock;
+                    items[idx].quantity = qty;
+                    setNewOrder({ ...newOrder, items });
+                  }}
+                />
+
+                <div className="text-right font-semibold">
+                  {Number(item.price).toLocaleString()} ₫
+                </div>
+
+                <div className="text-right font-semibold">
+                  {(item.price * item.quantity).toLocaleString()} ₫
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={addItemRow}
+              className="text-sm text-pink-600 hover:underline mb-4"
+            >
+              + Thêm sản phẩm
+            </button>
+
+            <div className="mb-4 font-bold text-right">
+              Tổng tiền: {calculateOrderTotal().toLocaleString()} ₫
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={createOrder}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                Tạo đơn
+              </button>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="border px-4 py-2 rounded"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedOrder && orderDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl max-w-2xl w-full relative max-h-[90vh] overflow-auto">
+            <button
+              onClick={() => { setSelectedOrder(null); setOrderDetail(null); }}
+              className="absolute top-2 right-4 text-2xl text-gray-400 hover:text-gray-600"
+            >
+              &times;
+            </button>
+            <h3 className="text-2xl font-bold mb-4 text-pink-600">
+              Chi tiết đơn hàng #{selectedOrder.id}
+            </h3>
+
+            <p><strong>Khách hàng:</strong> {orderDetail.customer_id}</p>
+            <p><strong>Địa chỉ giao:</strong> {orderDetail.shipping_address}</p>
+            <p><strong>Phương thức thanh toán:</strong> {orderDetail.payment_method}</p>
+            <p><strong>Trạng thái:</strong> {translateStatus(orderDetail.status)}</p>
+
+            <h4 className="mt-4 font-bold text-lg text-orange-500">Sản phẩm</h4>
+            <table className="w-full mb-4">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2">Tên</th>
+                  <th className="text-right py-2">Giá</th>
+                  <th className="text-right py-2">Số lượng</th>
+                  <th className="text-right py-2">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderDetail.items.map(item => (
+                  <tr key={item.id} className="border-b">
+                    <td>{item.name}</td>
+                    <td className="text-right">{Number(item.price).toLocaleString()} ₫</td>
+                    <td className="text-right">{item.quantity}</td>
+                    <td className="text-right font-semibold">{(item.price * item.quantity).toLocaleString()} ₫</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p className="font-bold text-right mb-4">
+              Tổng đơn hàng: {Number(orderDetail.total).toLocaleString()} ₫
+            </p>
+
+            <div>
+              <label className="block mb-2 font-semibold">Cập nhật trạng thái</label>
+              <select
+                className="border px-3 py-2 rounded w-full max-w-xs"
+                value={orderDetail.status}
+                onChange={e => setOrderDetail({ ...orderDetail, status: e.target.value })}
+              >
+                <option value="pending">Chờ xử lý</option>
+                <option value="paid">Đã thanh toán</option>
+                <option value="shipped">Đã gửi</option>
+                <option value="delivered">Đã giao</option>
+                <option value="canceled">Đã hủy</option>
+              </select>
+            </div>
+
+            <div className="mt-4 flex gap-2 justify-end">
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/orders/${selectedOrder.id}/status`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status: orderDetail.status }),
+                    });
+                    if (!res.ok) throw new Error("Lỗi cập nhật trạng thái");
+                    Swal.fire("Thành công", "Đã cập nhật trạng thái", "success");
+                    fetchOrders();
+                    setSelectedOrder(null);
+                    setOrderDetail(null);
+                  } catch (err) {
+                    Swal.fire("Lỗi", err.message, "error");
+                  }
+                }}
+              >
+                Cập nhật trạng thái
+              </button>
+              <button
+                className="border px-4 py-2 rounded"
+                onClick={() => {
+                  setSelectedOrder(null);
+                  setOrderDetail(null);
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Customers() {
+  const [customers, setCustomers] = React.useState([]);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [newCustomer, setNewCustomer] = React.useState({ name: "", email: "", phone: "", address: "" });
+  const [selectedCustomer, setSelectedCustomer] = React.useState(null);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editCustomer, setEditCustomer] = React.useState(null);
+
+  React.useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  const fetchCustomers = () => {
+    fetch("/api/customers")
+      .then(res => res.json())
+      .then(setCustomers)
+      .catch(() => Swal.fire("Lỗi", "Không lấy được khách hàng", "error"));
+  };
+
+  const handleAddCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCustomer)
+      });
+      if (!res.ok) throw new Error("Lỗi khi thêm khách hàng");
+      Swal.fire("Thành công!", "Đã thêm khách hàng.", "success");
+      setNewCustomer({ name: "", email: "", phone: "", address: "" });
+      setShowAddForm(false);
+      fetchCustomers();
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const openEdit = (customer) => {
+    setSelectedCustomer(customer);
+    setEditCustomer(customer);
+    setIsEditing(true);
+  };
+
+  const handleEditCustomer = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`/api/customers/${editCustomer._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editCustomer)
+      });
+      if (!res.ok) throw new Error("Lỗi khi cập nhật khách hàng");
+      Swal.fire("Thành công!", "Đã cập nhật thông tin.", "success");
+      setIsEditing(false);
+      setEditCustomer(null);
+      fetchCustomers();
+    } catch (err) {
+      Swal.fire("Lỗi", err.message, "error");
+    }
+  };
+
+  const handleDelete = async (customer) => {
+    Swal.fire({
+      title: `Xóa khách hàng ${customer.name}?`,
+      text: "Hành động này không thể hoàn tác.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Xóa",
+      cancelButtonText: "Hủy",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const res = await fetch(`/api/customers/${customer._id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("Lỗi khi xóa khách hàng");
+          Swal.fire("Đã xóa!", "Khách hàng đã được xóa.", "success");
+          fetchCustomers();
+        } catch (err) {
+          Swal.fire("Lỗi", err.message, "error");
+        }
+      }
+    });
+  };
+
+  return (
+    <div className="p-8">
+      <h2 className="text-3xl font-bold mb-6 text-pink-600 flex justify-between items-center">
+        Khách hàng
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+        >
+          + Thêm khách hàng
+        </button>
+      </h2>
+
+      {showAddForm && (
+        <div className="mb-8 bg-white p-6 rounded-2xl shadow-xl max-w-xl">
+          <form onSubmit={handleAddCustomer} className="space-y-4">
+            <div>
+              <label className="block font-semibold mb-1">Tên *</label>
+              <input type="text" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2" required />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Email</label>
+              <input type="email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">SĐT</label>
+              <input type="text" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Địa chỉ</label>
+              <input type="text" value={newCustomer.address} onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2" />
+            </div>
+            <div className="flex gap-4">
+              <button type="submit" className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700">Thêm</button>
+              <button type="button" onClick={() => setShowAddForm(false)}
+                className="px-4 py-2 border rounded border-gray-300 hover:bg-gray-100">Hủy</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <table className="min-w-full bg-white rounded-2xl shadow-xl">
+        <thead>
+          <tr className="bg-pink-100 text-pink-700">
+            <th className="py-4 px-6 text-left">Tên</th>
+            <th className="py-4 px-6 text-left">Email</th>
+            <th className="py-4 px-6 text-left">SĐT</th>
+            <th className="py-4 px-6 text-left">Địa chỉ</th>
+            <th className="py-4 px-6 text-left">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {customers.map(c => (
+            <tr key={c._id} className="hover:bg-pink-50">
+              <td className="py-4 px-6">{c.name}</td>
+              <td className="py-4 px-6">{c.email}</td>
+              <td className="py-4 px-6">{c.phone}</td>
+              <td className="py-4 px-6">{c.address}</td>
+              <td className="py-4 px-6 flex gap-2">
+                <button onClick={() => openEdit(c)} className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500">Sửa</button>
+                <button onClick={() => handleDelete(c)} className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">Xóa</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl max-w-lg w-full relative">
+            <button onClick={() => { setIsEditing(false); setEditCustomer(null); }}
+              className="absolute top-2 right-4 text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+            <h3 className="text-2xl font-bold mb-4 text-pink-600">Sửa khách hàng</h3>
+            <form onSubmit={handleEditCustomer} className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-1">Tên *</label>
+                <input type="text" value={editCustomer.name} onChange={e => setEditCustomer({ ...editCustomer, name: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2" required />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Email</label>
+                <input type="email" value={editCustomer.email} onChange={e => setEditCustomer({ ...editCustomer, email: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2" />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">SĐT</label>
+                <input type="text" value={editCustomer.phone} onChange={e => setEditCustomer({ ...editCustomer, phone: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2" />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Địa chỉ</label>
+                <input type="text" value={editCustomer.address} onChange={e => setEditCustomer({ ...editCustomer, address: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2" />
+              </div>
+              <div className="flex gap-4">
+                <button type="submit" className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700">Lưu</button>
+                <button type="button" onClick={() => { setIsEditing(false); setEditCustomer(null); }}
+                  className="px-4 py-2 border rounded border-gray-300 hover:bg-gray-100">Hủy</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [currentPage, setCurrentPage] = React.useState("Tổng quan");
+  return (
+    <div className="flex">
+      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <main className="flex-1 min-h-screen">
+        {currentPage === "Tổng quan" && <Dashboard />}
+        {currentPage === "Sản phẩm" && <Products />}
+        {currentPage === "Đơn hàng" && <Orders />}
+        {currentPage === "Khách hàng" && <Customers />}
+      </main>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+
+</script>
+</body>
+</html>

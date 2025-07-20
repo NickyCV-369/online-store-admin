@@ -1,0 +1,138 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - product-service
+      - order-service
+      - customer-service
+      - payment-service
+    networks:
+      - online-store
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    expose:
+      - "80"
+    restart: always
+    depends_on:
+      - product-service
+      - order-service
+      - customer-service
+      - payment-service
+    networks:
+      - online-store
+
+  product-service:
+    build: ./product-service
+    container_name: product-service
+    expose:
+      - "3001"
+    restart: always
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/productsdb
+    depends_on:
+      - mongo
+    networks:
+      - online-store
+
+  customer-service:
+    build: ./customer-service
+    container_name: customer-service
+    expose:
+      - "3003"
+    restart: always
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/customersdb
+    depends_on:
+      - mongo
+    networks:
+      - online-store
+
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    expose:
+      - "3002"
+    restart: always
+    environment:
+      - PGHOST=postgres-orders
+      - PGUSER=postgres
+      - PGPASSWORD=password
+      - PGDATABASE=ordersdb
+      - PGPORT=5432
+    depends_on:
+      - postgres-orders
+    networks:
+      - online-store
+
+  payment-service:
+    build: ./payment-service
+    container_name: payment-service
+    expose:
+      - "3004"
+    restart: always
+    environment:
+      - PGHOST=postgres-payments
+      - PGUSER=postgres
+      - PGPASSWORD=password
+      - PGDATABASE=paymentsdb
+      - PGPORT=5432
+    depends_on:
+      - postgres-payments
+    networks:
+      - online-store
+
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - online-store
+
+  postgres-orders:
+    image: postgres:14
+    container_name: postgres-orders
+    restart: always
+    environment:
+      POSTGRES_DB: ordersdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_orders_data:/var/lib/postgresql/data
+    networks:
+      - online-store
+
+  postgres-payments:
+    image: postgres:14
+    container_name: postgres-payments
+    restart: always
+    environment:
+      POSTGRES_DB: paymentsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_payments_data:/var/lib/postgresql/data
+    networks:
+      - online-store
+
+volumes:
+  mongo_data:
+  postgres_orders_data:
+  postgres_payments_data:
+
+networks:
+  online-store:
+# docker-compose exec postgres psql -U postgres -d paymentsdb
+# docker exec -it mongo mongosh
+# use customersdb
+# use productsdb
