@@ -85,6 +85,7 @@ services:
       - PGPASSWORD=password
       - PGDATABASE=paymentsdb
       - PGPORT=5432
+      - STRIPE_SECRET_KEY=sk_test_51RjxabPwOpFTqV3r3Df8gaXlD9gWp9Xvzni8Sw9hXjLLpR9IcPM0k7wZayROLRQvpFLoFVMMqQQ7ADyyzBGpzGXa00lsYj46Vg
     depends_on:
       - postgres-payments
     networks:
