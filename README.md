@@ -20,9 +20,26 @@
 | payment-service    | 3004 | PostgreSQL| Node.js, Express, Stripe API |
 | nginx              | 80   | ✖         | Reverse Proxy      |
 
+## 🚀 Cách chạy dự án bằng Docker
+
+### ⚙️ Yêu cầu
+- Docker & Docker Compose
+- Git
+
+### 🧩 Bước 1: Clone mã nguồn
+```bash
+git clone https://github.com/NickyCV-369/online-store-admin.git
+cd online-store-admin
+```
+### Bước 2: Chạy ứng dụng
+docker compose up -d --build
+
+Truy cập:
+React giao diện chính: http://localhost
+
 ## ✅ Test tính năng
 
-- Truy cập `http://localhost` để xem giao diện người dùng.
+- Truy cập `http://localhost` để xem giao diện admin.
 - Sử dụng Postman:
   - GET `http://localhost/api/products`
   - POST `http://localhost/api/orders`
@@ -31,31 +48,12 @@
 
 ## 🐞 Các lỗi đã gặp và cách khắc phục
 
-| Lỗi | Cách khắc phục |
-|-----|----------------|
-| Port 80 already in use | Đóng process đang chiếm hoặc đổi port Nginx |
-| Secrets bị push lên GitHub | Dùng `.env.example` và thêm `.env` vào `.gitignore` |
-| Lỗi kết nối DB | Kiểm tra biến môi trường và mạng docker-compose |
-| Lỗi `value too long for type character varying` | Tăng giới hạn độ dài cột trong DB |
-
-## 🔐 .env & bảo mật
-
-```env
-# .env.example
-STRIPE_SECRET_KEY=your_stripe_test_key_here
-MONGO_URI=mongodb://mongo:27017/productsdb
-POSTGRES_URI=postgres://postgres:password@postgres:5432/dbname
-```
-
-## ▶️ Video demo
-
-Video bao gồm:
-- Click trực tiếp trên giao diện React
-- Gọi API qua Postman
-- Giải thích `order-service` (hoặc service bất kỳ)
-- Triển khai VPS, show logs, `docker ps`...
+|             Lỗi        |                  Cách khắc phục                 |
+|------------------------|-------------------------------------------------|
+| Port 80 already in use | Đóng process đang chiếm hoặc đổi port Nginx     |
+| Lỗi kết nối DB         | Kiểm tra biến môi trường và mạng docker-compose |
+| Lỗi `value too long`   | Tăng giới hạn độ dài cột trong DB               |
 
 ## 🔗 Link GitHub / mã nguồn
 
-- GitHub: https://github.com/your-username/online-store
-- hoặc file ZIP đính kèm trong phần nộp bài.
+- GitHub: https://github.com/NickyCV-369/online-store-admin
